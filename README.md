@@ -1,4 +1,5 @@
-# MySQL Benchmark Tool `Revised`
+# MySQL Benchmark Tool
+#### 　　　　　　　　　`Revised`
 MySQL Benchmark Tool is a lightweight commandline tool for repeatedly executing SQL-Statements from a previously written MySQL-Log.
 
 ## Download
