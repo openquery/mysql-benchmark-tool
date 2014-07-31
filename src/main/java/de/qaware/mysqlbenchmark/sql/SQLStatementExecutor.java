@@ -18,6 +18,8 @@ package de.qaware.mysqlbenchmark.sql;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import de.qaware.mysqlbenchmark.logfile.Query;
+import de.qaware.mysqlbenchmark.func.SQLType;
 
 import java.sql.*;
 
@@ -38,15 +40,19 @@ public class SQLStatementExecutor {
      * @param name statement string
      * @return the result set
      */
-    public ResultSet executeStatement(String name) {
+    public Object executeStatement(Query name) {
         try {
             // prepare statement for execution
-            PreparedStatement ps = connection.prepareStatement(name);
+            PreparedStatement ps = connection.prepareStatement(name.getSql());
 
             // execute the statement and return the result
-            return ps.executeQuery();
+            if (name.getType() == SQLType.read) {
+                return ps.executeQuery();
+            } else {
+                return ps.executeUpdate();
+            }
         } catch (SQLException e) {
-            LOG.error("Execution of statement {} failed.", name, e);
+            LOG.error("Execution of statement {} failed.", name.getSql(), e);
         }
         return null;
     }

@@ -49,7 +49,7 @@ public class Parameters {
      */
     @Parameter(names = {"-s"},
             description = "The connection string to the mysql server (without database name)."
-                    + " eg.: -c jdbc:mysql://localhost:3306/",
+                    + " eg.: -s jdbc:mysql://localhost:3306/",
             required = false)
     private String server = "jdbc:mysql://localhost:3306/";
 
@@ -76,6 +76,21 @@ public class Parameters {
             description = "Location of the output file to write the results to",
             required = false)
     private String resultfilename = "results.txt";
+
+    /**
+     *  The batch of single operation
+     */
+    @Parameter(names = {"-b"},
+            description = "The batch of single operation",
+            required = false)
+    private int batch = 20000;
+    /**
+     * Parallel Parameter. Not use yet.
+     */
+    @Parameter(names = {"-pa"},
+            description = "The parallel of operation",
+            required = false)
+    private int parallel = 1;
 
     /**
      * Execute mysql query benchmark based on mysql logs
@@ -211,5 +226,21 @@ public class Parameters {
      */
     public String getFormat() {
         return format;
+    }
+
+    public int getBatch() {
+        return batch;
+    }
+
+    public void setBatch(int batch) {
+        this.batch = batch;
+    }
+
+    public int getParallel() {
+        return parallel;
+    }
+
+    public void setParallel(int parallel) {
+        this.parallel = parallel;
     }
 }

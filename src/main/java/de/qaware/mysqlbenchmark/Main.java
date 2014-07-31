@@ -67,38 +67,40 @@ final class Main {
         }
 
         SQLStatementExecutor executor = new SQLStatementExecutor();
+        FileWriter writer = null;
 
         /**
          * parse the logfile and run queries
          */
         try {
-            parser.parseLogFile(params.getInputFile(), params.getConnectionID(), params.getIgnorePrefixes());
-            LOG.info("Read " + parser.getQueries().size() + " queries from file '" + params.getInputFile() + "'.");
-
+            writer = new FileWriter(params.getResultfilename());
             executor.initConnection(params.getServer() + params.getDatabase(), params.getUsername(), params.getPassword());
             QueryBenchmark benchmark = new QueryBenchmark(executor);
 
-            // process queries
-            try {
-                LOG.info("Executing benchmark...");
-                benchmark.processQueries(parser.getQueries());
-                LOG.info("Benchmark completed");
-            } catch (Exception e) {
-                LOG.error("Error processing queries.", e);
-            }
-            // get time measurements
-            String result = benchmark.getResult(QueryBenchmark.Format.get(params.getFormat()));
+            while (parser.parseLogFile(params.getInputFile(), params.getConnectionID(), params.getIgnorePrefixes(), params.getBatch())) {
 
-            if (params.isVerbose()) {
-                LOG.info(result);
-            }
+                LOG.info("Read " + parser.getQueries().size() + " queries from file '" + params.getInputFile() + "'.");
 
-            // write result to file if needed
-            if (!Strings.isStringEmpty(params.getResultfilename())) {
-                FileWriter writer = new FileWriter(params.getResultfilename());
-                LOG.info("Writing result to " + params.getResultfilename());
-                writer.write(result);
-                writer.close();
+                // process queries
+                try {
+                    LOG.info("Executing benchmark...");
+                    benchmark.processQueries(parser.getQueries());
+                    LOG.info("Benchmark completed");
+                } catch (Exception e) {
+                    LOG.error("Error processing queries.", e);
+                }
+                // get time measurements
+                String result = benchmark.getResult(QueryBenchmark.Format.get(params.getFormat()));
+
+                if (params.isVerbose()) {
+                    LOG.info(result);
+                }
+
+                // write result to file if needed
+                if (!Strings.isStringEmpty(params.getResultfilename())) {
+                    LOG.info("Writing result to " + params.getResultfilename());
+                    writer.write(result);
+                }
             }
 
         } catch (FileNotFoundException e) {
@@ -109,6 +111,7 @@ final class Main {
             LOG.error("SQL Exception.", e);
         } finally {
             try {
+                writer.close();
                 executor.closeConnection();
             } catch (Exception e) {
                 /* Intentionally Swallow  Exception */

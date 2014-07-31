@@ -17,6 +17,7 @@
 package de.qaware.mysqlbenchmark.logfile;
 
 import com.google.common.base.Strings;
+import de.qaware.mysqlbenchmark.func.SQLFunc;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -32,14 +33,19 @@ import java.util.regex.Pattern;
  * @author Felix Kelm felix.kelm@qaware.de
  */
 public class QueryParser {
-    private List<String> queries = new ArrayList<String>(1000);
+    /**
+     * The parsed index.
+     */
+    private int index = 0;
+
+    private List<Query> queries = new ArrayList<Query>(1000);
 
     /**
      * All parsed queries.
      *
      * @return a list of queries
      */
-    public List<String> getQueries() {
+    public List<Query> getQueries() {
         return queries;
     }
 
@@ -69,8 +75,19 @@ public class QueryParser {
                 }
             }
 
-            queries.add(matcher.group(1));
+            for(SQLFunc funcPrefix : SQLFunc.values()) {
+                if (!matcher.group(1).toLowerCase().startsWith(funcPrefix.name())) {
+                    return;
+                }
+            }
+            Query query = new Query(parseSQLFunc(matcher.group(1)),matcher.group(1));
+            queries.add(query);
         }
+    }
+
+    private SQLFunc parseSQLFunc(String sql) {
+         String[] tokens = sql.split(" ");
+        return SQLFunc.valueOf(tokens[0]);
     }
 
     /**
@@ -81,14 +98,18 @@ public class QueryParser {
      * @param ignorePrefixes do not accept queries which start with these prefixes. May be null if not needed.
      * @throws IOException
      */
-    public void parseLogFile(String inputFilename, String restrictedID, List<String> ignorePrefixes) throws IOException {
+    public boolean parseLogFile(String inputFilename, String restrictedID, List<String> ignorePrefixes, int offset) throws IOException {
         BufferedReader br = new BufferedReader(new FileReader(inputFilename));
         String line;
-
+        this.queries.clear();
+        int sessionCount = 0;
         // parse the file line by line
-        while ((line = br.readLine()) != null) {
+        while ((line = br.readLine()) != null && sessionCount<offset) {
+            index++;
+            sessionCount++;
             parseLine(line, restrictedID, ignorePrefixes);
         }
         br.close();
+        return (offset-sessionCount) == 0;
     }
 }
