@@ -25,6 +25,7 @@ import etm.core.monitor.EtmPoint;
 import etm.core.renderer.MeasurementRenderer;
 import etm.core.renderer.SimpleTextRenderer;
 
+import de.qaware.mysqlbenchmark.logfile.Query;
 import java.io.StringWriter;
 import java.sql.SQLException;
 import java.util.List;
@@ -53,7 +54,7 @@ public class QueryBenchmark {
      * @param queries queries to execute
      * @throws SQLException
      */
-    public void processQueries(List<String> queries) throws SQLException {
+    public void processQueries(List<Query> queries) throws SQLException {
         // start jetm for time measurements
         BasicEtmConfigurator.configure();
         etmMonitor = EtmManager.getEtmMonitor();
@@ -62,9 +63,9 @@ public class QueryBenchmark {
         // one aggregation measurement point
         EtmPoint mpoint = etmMonitor.createPoint("Measurement");
         try {
-            for (String query : queries) {
+            for (Query query : queries) {
                 // one measurement point for every query
-                EtmPoint qpoint = etmMonitor.createPoint("Query: " + query);
+                EtmPoint qpoint = etmMonitor.createPoint("Query: " + query.getSql());
                 try {
                     executor.executeStatement(query);
                 } finally {
