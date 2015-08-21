@@ -18,6 +18,7 @@ package de.qaware.mysqlbenchmark.logfile;
 
 import com.google.common.base.Strings;
 import de.qaware.mysqlbenchmark.func.SQLFunc;
+import de.qaware.mysqlbenchmark.sql.SQLStatementExecutor;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -31,22 +32,23 @@ import java.util.regex.Pattern;
  * Simple query parser for mysql log files based on query-ids and prefixes. Uses regex matching.
  *
  * @author Felix Kelm felix.kelm@qaware.de
+ * @author Daniel Black daniel.black@openquery.com.au
  */
 public class QueryParser {
-    /**
-     * The parsed index.
-     */
-    private int index = 0;
 
-    private List<Query> queries = new ArrayList<Query>(1000);
+    private SQLStatementExecutor executor;
+    private int sessionCount = 0;
+    private BufferedReader br;
+    List<String> ignorePrefixes;
+    String restrictedID;
 
-    /**
-     * All parsed queries.
-     *
-     * @return a list of queries
-     */
-    public List<Query> getQueries() {
-        return queries;
+    public QueryParser(SQLStatementExecutor executor, String inputFilename,
+        String restrictedID, List<String> ignorePrefixes) throws IOException {
+
+        this.executor = executor;
+        this.ignorePrefixes = ignorePrefixes;
+        this.restrictedID = restrictedID;
+        BufferedReader br = new BufferedReader(new FileReader(inputFilename));
     }
 
     /**
@@ -58,30 +60,51 @@ public class QueryParser {
      */
     public void parseLine(String line, String restrictedID, List<String> ignorePrefixes) {
 
-        // if restricted to one connection id, create a prefix to match all queries
-        String prefixPattern = Strings.isNullOrEmpty(restrictedID) ? "\\d+" : restrictedID.toLowerCase();
 
-        // match all statements beginning with 'query' and the prefixPattern
-        Pattern pattern = Pattern.compile("[\\s\\d:]*\\s+" + prefixPattern + "\\s+query\\s+(.*)$", Pattern.CASE_INSENSITIVE);
+        // Break out statement into connectionID, type (Query/Connection/Quit/Init DB), query
+        Pattern pattern = Pattern.compile("(?:\\d+\\s+[\\d:]*)?\\s+(\\d+)\\s+(\\w+(?:\\s\\w+)?)\\s+(.*)$", Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(line);
 
         // add all matches to the query store
         if (matcher.find()) {
-
-            // ignore queries which start with special words
-            for (String prefix : ignorePrefixes) {
-                if (matcher.group(1).toLowerCase().startsWith(prefix.toLowerCase())) {
-                    return;
-                }
+            Integer id = new Integer(matcher.group(1));
+            // if restricted to one connection id, create a prefix to match all queries
+            if (!Strings.isNullOrEmpty(restrictedID) && id.equals(restrictedID)) {
+                return;
             }
 
-            for(SQLFunc funcPrefix : SQLFunc.values()) {
-                if (!matcher.group(1).toLowerCase().startsWith(funcPrefix.name())) {
+            switch (matcher.group(2).toLowerCase()) {
+                // include/mysql.h.pp enum_server_command has all the options
+                case "connect":
+                    // matcher.group(3).left(" ")
+                    executor.connect(id, matcher.group(3));
+                    break;
+                case "query":
+                    String query = matcher.group(3);
+                    // ignore queries which start with special words
+                    for (String prefix : ignorePrefixes) {
+                        if (query.toLowerCase().startsWith(prefix.toLowerCase())) {
+                            return;
+                        }
+                    }
+
+                    for(SQLFunc funcPrefix : SQLFunc.values()) {
+                        if (!query.toLowerCase().startsWith(funcPrefix.name())) {
+                            return;
+                        }
+                    }
+                    executor.query(new Query(parseSQLFunc(query),query));
+                    break;
+                case "init db":
+                    executor.initDb(id, matcher.group(3));
+                    break;
+                case "quit":
+                    executor.quit(id);
+                    break;
+                default:
                     return;
-                }
             }
-            Query query = new Query(parseSQLFunc(matcher.group(1)),matcher.group(1));
-            queries.add(query);
+
         }
     }
 
@@ -93,23 +116,22 @@ public class QueryParser {
     /**
      * Read sql queries from the given logfile
      *
-     * @param inputFilename  input file
-     * @param restrictedID   query ids to ignore
-     * @param ignorePrefixes do not accept queries which start with these prefixes. May be null if not needed.
+     * @param offset         number of queries to read in this batch
      * @throws IOException
      */
-    public boolean parseLogFile(String inputFilename, String restrictedID, List<String> ignorePrefixes, int offset) throws IOException {
-        BufferedReader br = new BufferedReader(new FileReader(inputFilename));
+    public boolean parseLogFile(int offset) throws IOException {
         String line;
-        this.queries.clear();
-        int sessionCount = 0;
+        sessionCount = 0;
         // parse the file line by line
         while ((line = br.readLine()) != null && sessionCount<offset) {
-            index++;
             sessionCount++;
             parseLine(line, restrictedID, ignorePrefixes);
         }
         br.close();
         return (offset-sessionCount) == 0;
+    }
+
+    public int size() {
+        return sessionCount;
     }
 }

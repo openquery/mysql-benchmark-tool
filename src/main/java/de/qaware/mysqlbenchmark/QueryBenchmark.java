@@ -36,46 +36,21 @@ import java.util.List;
  * @author Felix Kelm felix.kelm@qaware.de
  */
 public class QueryBenchmark {
-    private EtmMonitor etmMonitor;
+    protected EtmMonitor etmMonitor;
     private SQLStatementExecutor executor;
+    private EtmPoint mpoint;
 
     /**
      * Constructor
      *
-     * @param executor executor to execute the sql queries.
      */
-    public QueryBenchmark(SQLStatementExecutor executor) {
-        this.executor = executor;
-    }
-
-    /**
-     * Run query list against the executor and measure timings with jetm
-     *
-     * @param queries queries to execute
-     * @throws SQLException
-     */
-    public void processQueries(List<Query> queries) throws SQLException {
+    public QueryBenchmark() {
         // start jetm for time measurements
         BasicEtmConfigurator.configure();
         etmMonitor = EtmManager.getEtmMonitor();
         etmMonitor.start();
-
         // one aggregation measurement point
-        EtmPoint mpoint = etmMonitor.createPoint("Measurement");
-        try {
-            for (Query query : queries) {
-                // one measurement point for every query
-                EtmPoint qpoint = etmMonitor.createPoint("Query: " + query.getSql());
-                try {
-                    executor.executeStatement(query);
-                } finally {
-                    qpoint.collect();
-                }
-            }
-        } finally {
-            mpoint.collect();
-            etmMonitor.stop();
-        }
+        mpoint = etmMonitor.createPoint("Measurement");
     }
 
     /**
@@ -111,6 +86,8 @@ public class QueryBenchmark {
     public String getResult(Format format) {
         StringWriter sw = new StringWriter();
 
+        mpoint.collect();
+        etmMonitor.stop();
         MeasurementRenderer renderer = null;
         switch (format) {
             case JETM:

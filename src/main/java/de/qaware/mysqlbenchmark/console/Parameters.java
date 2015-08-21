@@ -84,6 +84,7 @@ public class Parameters {
             description = "The batch of single operation",
             required = false)
     private int batch = 20000;
+
     /**
      * Parallel Parameter. Not use yet.
      */
@@ -128,6 +129,14 @@ public class Parameters {
             description = "The result can be in default JETM style or CSV. JETM is default.",
             required = false)
     private String format = "JETM";
+
+    /**
+     * JDBC driver
+     */
+    @Parameter(names = {"-d"},
+            description = "The drivername of the mysql driver that must be in the classpath. com.mysql.jdbc.Driver is the default.",
+            required = false)
+    private String driver = "com.mysql.jdbc.Driver";
 
     /**
      * mysql username
@@ -232,15 +241,11 @@ public class Parameters {
         return batch;
     }
 
-    public void setBatch(int batch) {
-        this.batch = batch;
-    }
-
     public int getParallel() {
         return parallel;
     }
 
-    public void setParallel(int parallel) {
-        this.parallel = parallel;
+    public String getDriver() {
+        return driver;
     }
 }

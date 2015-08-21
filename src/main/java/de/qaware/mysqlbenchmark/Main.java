@@ -36,7 +36,7 @@ import java.sql.SQLException;
  * @author Felix Kelm felix.kelm@qaware.de
  */
 final class Main {
-    private static QueryParser parser = new QueryParser();
+    private static QueryParser parser;
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(Main.class);
 
     private Main() {
@@ -55,7 +55,7 @@ final class Main {
          */
         final Parameters params = new Parameters();
         final JCommander commander = new JCommander(params);
-        commander.setProgramName("MySQL Benckmark Tool");
+        commander.setProgramName("MySQL Benchmark Tool");
         try {
             commander.parse(args);
         } catch (ParameterException e) {
@@ -67,8 +67,9 @@ final class Main {
             return;
         }
 
-        SQLStatementExecutor executor = new SQLStatementExecutor();
+        SQLStatementExecutor benchmark = new SQLStatementExecutor(params);
         FileWriter writer = null;
+        parser = new QueryParser(benchmark, params.getInputFile(), params.getConnectionID(), params.getIgnorePrefixes());
 
         /**
          * parse the logfile and run queries
@@ -76,12 +77,10 @@ final class Main {
         try {
 
             writer = new FileWriter(params.getResultfilename());
-            executor.initConnection(params.getServer() + params.getDatabase(), params.getUsername(), params.getPassword());
-            QueryBenchmark benchmark = new QueryBenchmark(executor);
 
-            while (parser.parseLogFile(params.getInputFile(), params.getConnectionID(), params.getIgnorePrefixes(), params.getBatch())) {
+            while (parser.parseLogFile(params.getBatch())) {
 
-                LOG.info("Read " + parser.getQueries().size() + " queries from file '" + params.getInputFile() + "'.");
+                LOG.info("Read " + parser.size() + " queries from file '" + params.getInputFile() + "'.");
 
                 // process queries
                 try {
