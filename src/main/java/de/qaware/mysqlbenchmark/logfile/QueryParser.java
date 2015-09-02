@@ -42,70 +42,99 @@ public class QueryParser {
     List<String> ignorePrefixes;
     String restrictedID;
 
+    // Break out statement into datetime(not captured), connectionID, type (Query/Connection/Quit/Init DB), query
+    // 150811  6:47:54 940899 Connect  user@192.230.152.49 as anonymous on
+    //                 940899 Query    call  mysql.setdomain(current_user())
+    //                 940899 Init DB  wiki
+    //                 940899 Query    SET /* Database::open  */ sql_mode = ''
+    //                 940899 Query    BEGIN
+    //                 940899 Query    SELECT /* checkLastModified  */  MAX(rc_timestamp)  FROM `recentchanges`   LIMIT 1
+    static Pattern pattern = Pattern.compile("(?:\\d+\\s+[\\d:]*)?\\s+(\\d+)\\s+(\\w+(?:\\s\\w+)?)\\s+(.*)$", Pattern.CASE_INSENSITIVE);
+
     public QueryParser(SQLStatementExecutor executor, String inputFilename,
         String restrictedID, List<String> ignorePrefixes) throws IOException {
 
         this.executor = executor;
         this.ignorePrefixes = ignorePrefixes;
         this.restrictedID = restrictedID;
-        BufferedReader br = new BufferedReader(new FileReader(inputFilename));
+        br = new BufferedReader(new FileReader(inputFilename));
     }
 
+    public void close() throws IOException {
+        br.close();
+    }
     /**
      * Read ONE query from a string
      *
-     * @param line           String to parse for ONE query.
      * @param restrictedID   only parse the query if this connection id matches
      * @param ignorePrefixes do not accept queries which start with these prefixes. May be null if not needed.
+     * @return false if no more lines in br
      */
-    public void parseLine(String line, String restrictedID, List<String> ignorePrefixes) {
+    public boolean parseLine(String restrictedID, List<String> ignorePrefixes) throws IOException {
 
-
-        // Break out statement into connectionID, type (Query/Connection/Quit/Init DB), query
-        Pattern pattern = Pattern.compile("(?:\\d+\\s+[\\d:]*)?\\s+(\\d+)\\s+(\\w+(?:\\s\\w+)?)\\s+(.*)$", Pattern.CASE_INSENSITIVE);
+        String line = br.readLine();
+        if (line == null) {
+            return false;
+        }
         Matcher matcher = pattern.matcher(line);
 
         // add all matches to the query store
         if (matcher.find()) {
-            Integer id = new Integer(matcher.group(1));
+            String id = matcher.group(1);
             // if restricted to one connection id, create a prefix to match all queries
             if (!Strings.isNullOrEmpty(restrictedID) && id.equals(restrictedID)) {
-                return;
+                return true;
             }
 
-            switch (matcher.group(2).toLowerCase()) {
+            String type =matcher.group(2).toLowerCase();
                 // include/mysql.h.pp enum_server_command has all the options
-                case "connect":
-                    // matcher.group(3).left(" ")
-                    executor.connect(id, matcher.group(3));
-                    break;
-                case "query":
-                    String query = matcher.group(3);
-                    // ignore queries which start with special words
-                    for (String prefix : ignorePrefixes) {
-                        if (query.toLowerCase().startsWith(prefix.toLowerCase())) {
-                            return;
-                        }
+            if (type.equals("connect")) {
+                // matcher.group(3).left(" ")
+                executor.connect(id, matcher.group(3));
+            } else if (type.equals("query")) {
+                String query = matcher.group(3);
+                boolean ignore = false;
+                // ignore queries which start with special words
+                for (String prefix : ignorePrefixes) {
+                    if (query.toLowerCase().startsWith(prefix.toLowerCase())) {
+                        ignore = true;
+                        break;
                     }
+                }
 
-                    for(SQLFunc funcPrefix : SQLFunc.values()) {
-                        if (!query.toLowerCase().startsWith(funcPrefix.name())) {
-                            return;
-                        }
+                for(SQLFunc funcPrefix : SQLFunc.values()) {
+                    if (!query.toLowerCase().startsWith(funcPrefix.name())) {
+                        ignore = true;
+                        break;
                     }
-                    executor.query(new Query(parseSQLFunc(query),query));
-                    break;
-                case "init db":
-                    executor.initDb(id, matcher.group(3));
-                    break;
-                case "quit":
-                    executor.quit(id);
-                    break;
-                default:
-                    return;
+                }
+                // queries can be multiple lines.
+                while (true) {
+                    // TODO should be max packet size (from where the query log was taken) as this is the max query length
+                    br.mark(200000);
+                    line = br.readLine();
+                    if (line == null) {
+                        return false;
+                    }
+                    matcher = pattern.matcher(line);
+                    if (matcher.matches()) {
+                        br.reset(); // revert to previous mark so next query can begin there.
+                        break;
+                    } else {
+                       query += line;
+                    }
+                }
+                if (!ignore) {
+                    executor.query(id, new Query(parseSQLFunc(query), query));
+                }
+            } else if (type.equals("init db")) {
+                executor.initDb(id, matcher.group(3));
+            } else if (type.equals("quit")) {
+                executor.quit(id);
             }
 
         }
+        return true;
     }
 
     private SQLFunc parseSQLFunc(String sql) {
@@ -120,18 +149,18 @@ public class QueryParser {
      * @throws IOException
      */
     public boolean parseLogFile(int offset) throws IOException {
-        String line;
         sessionCount = 0;
         // parse the file line by line
-        while ((line = br.readLine()) != null && sessionCount<offset) {
+        while (sessionCount<offset) {
             sessionCount++;
-            parseLine(line, restrictedID, ignorePrefixes);
+            if (!parseLine(restrictedID, ignorePrefixes))
+                break;
         }
-        br.close();
         return (offset-sessionCount) == 0;
     }
 
     public int size() {
         return sessionCount;
     }
+
 }

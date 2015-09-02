@@ -69,7 +69,12 @@ final class Main {
 
         SQLStatementExecutor benchmark = new SQLStatementExecutor(params);
         FileWriter writer = null;
-        parser = new QueryParser(benchmark, params.getInputFile(), params.getConnectionID(), params.getIgnorePrefixes());
+        try {
+            parser = new QueryParser(benchmark, params.getInputFile(), params.getConnectionID(), params.getIgnorePrefixes());
+        } catch (IOException e) {
+            LOG.error("IO Exception.", e);
+            return;
+        }
 
         /**
          * parse the logfile and run queries
@@ -84,8 +89,7 @@ final class Main {
 
                 // process queries
                 try {
-                    LOG.info("Executing benchmark...");
-                    benchmark.processQueries(parser.getQueries());
+                    benchmark.join();
                     LOG.info("Benchmark completed");
                 } catch (Exception e) {
                     LOG.error("Error processing queries.", e);
@@ -108,12 +112,10 @@ final class Main {
             LOG.error("File not found.", e);
         } catch (IOException e) {
             LOG.error("IO Exception.", e);
-        } catch (SQLException e) {
-            LOG.error("SQL Exception.", e);
         } finally {
+            parser.close();
             try {
                 writer.close();
-                executor.closeConnection();
             } catch (Exception e) {
                 /* Intentionally Swallow  Exception */
                 LOG.error("Could not close sql connection.");
